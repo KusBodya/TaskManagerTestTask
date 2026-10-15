@@ -11,12 +11,13 @@ public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddTaskServices(
         this IServiceCollection services,
-        string connectionString)
+        string? connectionString = null)
     {
         services.AddDbContext<TaskDbContext>(
-            options => options.UseNpgsql(connectionString));
+            options => options.UseNpgsql(connectionString ?? DatabaseSettings.GetConnectionString()));
 
         services.AddScoped<ITaskRepository, EfTaskRepository>();
+        services.AddScoped<IDatabaseInitializer, DatabaseInitializer>();
         services.AddSingleton<MainViewModel>();
         services.AddLogging(logging => logging.AddConsole());
 

@@ -1,18 +1,122 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:TaskTrackerAvalonia.ViewModels"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
         x:Class="TaskTrackerAvalonia.Views.MainWindow"
         x:DataType="vm:MainViewModel"
-        Icon="/Assets/avalonia-logo.ico"
-        Title="TaskTrackerAvalonia">
+        Title="Задачи"
+        Width="860" Height="560"
+        MinWidth="560" MinHeight="360"
+        Background="#FAFAFA"
+        FontFamily="Inter"
+        FontSize="14"
+        WindowStartupLocation="CenterScreen">
+    <Window.KeyBindings>
+        <KeyBinding Gesture="Ctrl+R" Command="{Binding LoadCommand}" />
+    </Window.KeyBindings>
 
-    <Design.DataContext>
-        <!-- This only sets the DataContext for the previewer in an IDE,
-             to set the actual DataContext for runtime, set the DataContext property in code (look at App.axaml.cs) -->
-        <vm:MainViewModel />
-    </Design.DataContext>
+    <Window.Styles>
+        <Style Selector="Button">
+            <Setter Property="CornerRadius" Value="4" />
+        </Style>
+        <Style Selector="DataGridColumnHeader">
+            <Setter Property="Background" Value="#F5F5F5" />
+            <Setter Property="Foreground" Value="#666666" />
+            <Setter Property="FontWeight" Value="Normal" />
+        </Style>
+        <Style Selector="TextBlock.completed">
+            <Setter Property="TextDecorations" Value="Strikethrough" />
+            <Setter Property="Foreground" Value="#888888" />
+        </Style>
+    </Window.Styles>
 
+    <Grid Margin="24" RowDefinitions="Auto,Auto,*,Auto" RowSpacing="16">
+        <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Text="Задачи" FontSize="24" FontWeight="SemiBold"
+                       VerticalAlignment="Center" />
+            <Button Grid.Column="1" Content="Обновить"
+                    Command="{Binding LoadCommand}" ToolTip.Tip="Ctrl+R" />
+        </Grid>
+
+        <Border Grid.Row="1" Background="#FFF1F0" BorderBrush="#F0C6C3"
+                BorderThickness="1" CornerRadius="4" Padding="12,8"
+                IsVisible="{Binding HasError}">
+            <TextBlock Text="{Binding ErrorMessage}" TextWrapping="Wrap" Foreground="#A4262C" />
+        </Border>
+
+        <Border Grid.Row="2" Background="White" BorderBrush="#E2E2E2"
+                BorderThickness="1" CornerRadius="4" ClipToBounds="True">
+            <Grid RowDefinitions="Auto,*">
+                <Grid ColumnDefinitions="*,Auto" Margin="12" ColumnSpacing="8">
+                    <TextBox x:Name="NewTaskInput" Text="{Binding NewTaskTitle, Mode=TwoWay}"
+                             PlaceholderText="Новая задача — Enter, чтобы добавить"
+                             IsReadOnly="{Binding IsBusy}"
+                             AutomationProperties.Name="Название новой задачи">
+                        <TextBox.KeyBindings>
+                            <KeyBinding Gesture="Enter" Command="{Binding AddTaskCommand}" />
+                        </TextBox.KeyBindings>
+                    </TextBox>
+                    <Button Grid.Column="1" Content="Добавить" Command="{Binding AddTaskCommand}" />
+                </Grid>
+
+                <Grid Grid.Row="1">
+                    <DataGrid x:Name="TaskTable" ItemsSource="{Binding Tasks}"
+                              AutoGenerateColumns="False" IsReadOnly="True"
+                              CanUserSortColumns="False" CanUserReorderColumns="False"
+                              CanUserResizeColumns="True" SelectionMode="Single"
+                              GridLinesVisibility="Horizontal" BorderThickness="0"
+                              HeadersVisibility="Column" RowHeight="48"
+                              HorizontalGridLinesBrush="#EEEEEE">
+                        <DataGrid.KeyBindings>
+                            <KeyBinding Gesture="Delete" Command="{Binding DeleteTaskCommand}"
+                                        CommandParameter="{Binding #TaskTable.SelectedItem}" />
+                        </DataGrid.KeyBindings>
+                        <DataGrid.Columns>
+                            <DataGridTemplateColumn Header="Готово" Width="76" CanUserResize="False">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate x:DataType="vm:TaskRowViewModel">
+                                        <CheckBox IsChecked="{Binding IsCompleted, Mode=OneWay}"
+                                                  HorizontalAlignment="Center"
+                                                  Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).ToggleCompletedCommand}"
+                                                  CommandParameter="{Binding}"
+                                                  AutomationProperties.Name="Выполнено" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="Название" Width="*" MinWidth="120">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate x:DataType="vm:TaskRowViewModel">
+                                        <TextBlock Text="{Binding Title}" Margin="12,0"
+                                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                                   Classes.completed="{Binding IsCompleted}"
+                                                   ToolTip.Tip="{Binding Title}" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Header="Создана" Width="160"
+                                                Binding="{Binding CreatedAtText}" />
+                            <DataGridTemplateColumn Width="92" CanUserResize="False">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate x:DataType="vm:TaskRowViewModel">
+                                        <Button Content="Удалить" Margin="4,0"
+                                                VerticalAlignment="Center" Background="Transparent"
+                                                Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).DeleteTaskCommand}"
+                                                CommandParameter="{Binding}" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                    <TextBlock Text="Задач пока нет" IsVisible="{Binding IsEmpty}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               Foreground="#888888" IsHitTestVisible="False" />
+                </Grid>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="3" ColumnDefinitions="*,Auto">
+            <TextBlock Text="{Binding TaskCountText}" Foreground="#777777" FontSize="12" />
+            <TextBlock Grid.Column="1" Text="Сохранение…" IsVisible="{Binding IsBusy}"
+                       Foreground="#777777" FontSize="12" />
+        </Grid>
+    </Grid>
 </Window>

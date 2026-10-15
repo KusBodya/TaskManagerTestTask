@@ -1,9 +1,11 @@
 using System;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Threading;
 using Microsoft.Extensions.DependencyInjection;
-using Npgsql;
+using Microsoft.Extensions.Logging;
 using TaskTrackerAvalonia.Extensions;
 using TaskTrackerAvalonia.ViewModels;
 using TaskTrackerAvalonia.Views;
@@ -21,29 +23,35 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            DotNetEnv.Env.TraversePath().Load();
-
-            static string Required(string name)
-            {
-                return Environment.GetEnvironmentVariable(name)
-                       ?? throw new InvalidOperationException(
-                           $"Не задано значение {name} в .env");
-            }
-
-            var connectionString = new NpgsqlConnectionStringBuilder
-            {
-                Host = "localhost",
-                Port = 5433,
-                Database = Required("POSTGRES_DB"),
-                Username = Required("POSTGRES_USER"),
-                Password = Required("POSTGRES_PASSWORD")
-            }.ConnectionString;
-
             var services = new ServiceCollection()
-                .AddTaskServices(connectionString)
+                .AddTaskServices()
                 .BuildServiceProvider(validateScopes: true);
 
             var viewModel = services.GetRequiredService<MainViewModel>();
+            var logger = services.GetRequiredService<ILogger<App>>();
+
+            void OnUiException(object sender, DispatcherUnhandledExceptionEventArgs args)
+            {
+                viewModel.ReportError(args.Exception, "Произошла ошибка. Попробуй повторить действие.");
+                args.Handled = true;
+            }
+
+            void OnUnobservedException(object? sender, UnobservedTaskExceptionEventArgs args)
+            {
+                logger.LogError(args.Exception, "Необработанная ошибка фоновой задачи");
+                args.SetObserved();
+                Dispatcher.UIThread.Post(() =>
+                    viewModel.ErrorMessage = "Произошла ошибка в фоне. Попробуй повторить действие.");
+            }
+
+            void OnUnhandledException(object sender, UnhandledExceptionEventArgs args)
+            {
+                logger.LogCritical(args.ExceptionObject as Exception, "Критическая ошибка приложения");
+            }
+
+            Dispatcher.UIThread.UnhandledException += OnUiException;
+            TaskScheduler.UnobservedTaskException += OnUnobservedException;
+            AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;
 
             var window = new MainWindow
             {
@@ -53,7 +61,13 @@ public partial class App : Application
             window.Opened += async (_, _) => await viewModel.LoadAsync();
             desktop.MainWindow = window;
 
-            desktop.Exit += (_, _) => services.Dispose();
+            desktop.Exit += (_, _) =>
+            {
+                Dispatcher.UIThread.UnhandledException -= OnUiException;
+                TaskScheduler.UnobservedTaskException -= OnUnobservedException;
+                AppDomain.CurrentDomain.UnhandledException -= OnUnhandledException;
+                services.Dispose();
+            };
         }
 
         base.OnFrameworkInitializationCompleted();
