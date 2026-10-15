@@ -1,6 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
 using TaskTrackerAvalonia.Abstractions;
 using TaskTrackerAvalonia.Models;
 
@@ -8,23 +11,47 @@ namespace TaskTrackerAvalonia.Infrastructure;
 
 public class EfTaskRepository : ITaskRepository
 {
-    public Task<List<TaskItem>> GetAllAsync()
+    private readonly TaskDbContext _db;
+
+    public EfTaskRepository(TaskDbContext db)
     {
-        throw new NotImplementedException();
+        _db = db;
     }
 
-    public Task AddAsync(TaskItem task)
+    public async Task<List<TaskItem>> GetAllAsync()
     {
-        throw new NotImplementedException();
+        return await _db.Tasks
+            .AsNoTracking()
+            .OrderBy(task => task.CreatedAt)
+            .ToListAsync();
     }
 
-    public Task SetCompletedAsync(Guid id, bool isCompleted)
+    public async Task AddAsync(TaskItem task)
     {
-        throw new NotImplementedException();
+        Validator.ValidateObject(
+            task,
+            new ValidationContext(task),
+            validateAllProperties: true);
+
+        await _db.Tasks.AddAsync(task);
+        await _db.SaveChangesAsync();
     }
 
-    public Task DeleteAsync(Guid id)
+    public async Task SetCompletedAsync(Guid id, bool isCompleted)
     {
-        throw new NotImplementedException();
+        var task = await _db.Tasks.FirstOrDefaultAsync(task => task.Id == id)
+                   ?? throw new KeyNotFoundException("Тасочка не найдена.");
+
+        task.IsCompleted = isCompleted;
+        await _db.SaveChangesAsync();
+    }
+
+    public async Task DeleteAsync(Guid id)
+    {
+        var task = await _db.Tasks.FirstOrDefaultAsync(task => task.Id == id)
+                   ?? throw new KeyNotFoundException("Тасочка не найдена.");
+
+        task.IsDeleted = true;
+        await _db.SaveChangesAsync();
     }
 }
